@@ -1,311 +1,269 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Data;
-using System.Data.SqlClient;
-using System.Drawing;
+using System.Linq.Dynamic;
 using System.Linq;
-using System.Text;
 using System.Windows.Forms;
-using System.Configuration;
-using System.Data.Common;
+using System.Data.Linq;
 
 
 namespace TestBulankin
 {
-    public partial class Form1 : Form
-    {        
-        private List<int> idList = new List<int> { }; //Лист для сбора id при изменениях строк      
-        public Form1()
+    internal partial class MainForm : Form
+    {
+        private List<int> idList = new List<int> { }; //Лист для сбора id при изменениях строк
+        private Dictionary<string, string> Translate = new Dictionary<string, string> { }; //Словарь для перевода имен        
+        private DataContext db = new DataContext(string.Format(@"Data Source=(LocalDB)\v11.0;AttachDbFilename={0}\Test.mdf;",
+                    Environment.CurrentDirectory));
+        public MainForm()
         {            
             InitializeComponent();
+            Translate.Add("Dat", "Дата");
+            Translate.Add("Organisation", "Организация");
+            Translate.Add("City", "Город");
+            Translate.Add("Country", "Страна");
+            Translate.Add("Manager", "Менеджер");
+            Translate.Add("Quantity", "Количество");
+            Translate.Add("Summa", "Сумма");
         }
         
 
-        private void Form1_Load(object sender, EventArgs e)
-        {                
-            string query = "Select * from C#Table";
-            ConnectMethod(query); // Метод для заполнения грида
-            dataGridView1.Columns[0].Visible = false;                   //Скрываем стобик с id     
-            for (int i = 1; i < dataGridView1.Columns.Count - 2; i++) //Заполненя комбобокса
-                comboBox1.Items.Add(dataGridView1.Columns[i].HeaderText);
+        private void MainForm_Load(object sender, EventArgs e)
+        {            
+            var query = from data in db.GetTable<TableClass>() select data;
+            TableGrid.DataSource = query;
+            TableGrid.Columns[0].Visible = false;
+            for (int i = 1; i < TableGrid.Columns.Count; i++) // Переименовуем имена столбцов на русский
+                TableGrid.Columns[i].HeaderText = translate(TableGrid.Columns[i].HeaderText, false);
+            for (int i = 1; i < TableGrid.Columns.Count - 2; i++) //Заполненя комбобокса
+                ComboBofColumns.Items.Add(TableGrid.Columns[i].HeaderText);
         }
 
-        private void comboBox1_SelectedIndexChanged(object sender, EventArgs e) //Добавления имени столбца в листбокс при выборе столбца в комбобоксе
+        private void ComboBofColumns_SelectedIndexChanged(object sender, EventArgs e) // Добавления имени столбца в листбокс при выборе столбца в комбобоксе
         {
             bool check = false;
-            for(int i = 0; i < listBox1.Items.Count; i++)
+            for(int i = 0; i < ListBofColumns.Items.Count; i++)
             {
-                if(listBox1.Items[i]==comboBox1.SelectedItem)
+                if(ListBofColumns.Items[i]==ComboBofColumns.SelectedItem)
                 {
                     check = true;
                     break;
                 }
             }
             if(check==false)
-                listBox1.Items.Add(comboBox1.SelectedItem);
+                ListBofColumns.Items.Add(ComboBofColumns.SelectedItem);
         }
 
-        private void button1_Click(object sender, EventArgs e) // Переводим имена стобцов с русского на англ и составляем из них запрос
-        {
-            if(listBox1.Items.Count>0)
-            {                  
-            string query = "Select ";
-            for (int i = 0; i < listBox1.Items.Count; i++)
-            {
-                if (i == listBox1.Items.Count - 1)
-                    query += translate(listBox1.Items[i].ToString(), true) + ", Sum(Quantity) as Quantity, Sum(Summa) as Summa From C#Table Group by ";
-                else
-                    query += translate(listBox1.Items[i].ToString(), true) + " ,";
-            }
-            for (int i = 0; i < listBox1.Items.Count; i++)
-            {
-                if (i == listBox1.Items.Count - 1)
-                    query += translate(listBox1.Items[i].ToString(), true);
-                else
-                    query += translate(listBox1.Items[i].ToString(), true) + " ,";
-            }
-            ConnectMethod(query);
-            button3.Visible = false;
-            button4.Visible = false;
-            button5.Visible = false;
-            dataGridView1.ReadOnly = true;
-            }
+        private void SumButton_Click(object sender, EventArgs e) // Переводим имена стобцов с русского на англ и составляем из них запрос
+            {                        
+            string groupingQuery = $"new({string.Join(", ", ListBofColumns.Items.Cast<string>().Select(s => translate(s, true)))})";
+            string selectQuery = string.Join(", ", ListBofColumns.Items.Cast<string>().Select(s => $"Key.{translate(s, true)}"));            
+            var query = db.GetTable<TableClass>().GroupBy(groupingQuery, "new(Quantity,Summa)")
+                .Select($"new({selectQuery}, Sum(Quantity) as Quantity, Sum(Summa) as Summa)");
+            TableGrid.DataSource = query;            
+            DeleteButton.Visible = false;
+            AddButton.Visible = false;
+            ChangeButton.Visible = false;
+            TableGrid.ReadOnly = true;            
         }
 
-        private void button2_Click(object sender, EventArgs e) // Возврат к первоначальному запросу и установка всех кнопок в первоначальный вид
-        {
-            listBox1.Items.Clear();
-            comboBox1.Items.Clear();
-            Form1_Load(null, null);
-            button3.Visible = true;
-            button4.Visible = true;
-            button5.Visible = true;
-            button1.Visible = true;
+        private void DefaultButton_Click(object sender, EventArgs e)// Возврат к первоначальному запросу и установка всех кнопок в первоначальный вид
+            {
+            ListBofColumns.Items.Clear();
+            ComboBofColumns.Items.Clear();            
+            DeleteButton.Visible = true;
+            AddButton.Visible = true;
+            ChangeButton.Visible = true;
+            SumButton.Visible = true;
             idList.Clear();
-            dataGridView1.AllowUserToAddRows = false;
-            dataGridView1.ReadOnly = false;
+            TableGrid.AllowUserToAddRows = false;
+            TableGrid.ReadOnly = false;
+            TableGrid.Rows.Clear();
+            int columnsCount = TableGrid.Columns.Count;
+            for (int i = 0; i < columnsCount; i++)
+                TableGrid.Columns.RemoveAt(0);
+            MainForm_Load(null, null);
         }
+        
 
-        void ConnectMethod(string query) //Метод для заполнения грида
-        {            
-            try
-            {
-                dataGridView1.Columns.Clear();
-                //string _conect = ConfigurationManager.ConnectionStrings["MSSqlConStr"].ConnectionString;
-                string _conect = string.Format(@"Data Source=(LocalDB)\v11.0;AttachDbFilename={0}\Test.mdf;",
-                    Environment.CurrentDirectory);
-                BindingSource bs1 = new BindingSource();
-                DataTable DT = new DataTable();
-                using (SqlConnection con = new SqlConnection(_conect))
-                {
-                    using (SqlDataAdapter da = new SqlDataAdapter(query, con))
-                    {
-                        da.Fill(DT);
-                        bs1.DataSource = DT;
-                        dataGridView1.DataSource = bs1;
-                    }
-                }
-            }
-            catch
-            {
-                MessageBox.Show("Неправильно настроен App.config или нет соединения с сервером. \n");
-                Environment.Exit(0);
-            }
-            for (int i = 0; i < dataGridView1.Columns.Count; i++)
-                dataGridView1.Columns[i].HeaderText = translate(dataGridView1.Columns[i].HeaderText, false);
-        }
-
-        string translate(string name, bool option) // Метод для переводов имен столбцов
+        private string translate(string name, bool option) // Метод для переводов имен столбцов
         {
-            if(option)
-            switch (name)
-            {
-                case "Дата":
-                    name="Dat";
-                    break;
-                case "Организация":
-                    name = "Organisation";
-                    break;
-                case "Город":
-                    name = "City";
-                    break;
-                case "Страна":
-                    name = "Country";
-                    break;
-                case "Менеджер":
-                    name = "Manager";
-                    break;
-                case "Количество":
-                    name = "Quantity";
-                    break;
-                case "Сумма":
-                    name = "Summa";
-                    break;
-            }
+            if(!option)
+            name=Translate.Where(f => f.Key == name).Select(f => f.Value).SingleOrDefault();
             else
-            switch (name)
             {
-                case "Dat":
-                    name = "Дата";
-                    break;
-                case "Organisation":
-                    name = "Организация";
-                    break;
-                case "City":
-                    name = "Город";
-                    break;
-                case "Country":
-                    name = "Страна";
-                    break;
-                case "Manager":
-                    name = "Менеджер";
-                    break;
-                case "Quantity":
-                    name = "Количество";
-                    break;
-                case "Summa":
-                    name = "Сумма";
-                    break;
-            }
+                name = Translate.Where(f => f.Value == name).Select(f => f.Key).SingleOrDefault();
+            }            
             return name;
         }
 
-        private void button3_Click(object sender, EventArgs e) //Удаляем выбранную строку по id(который скрыт в гриде)
+        private void DeleteButton_Click(object sender, EventArgs e) //Удаляем выбранную строку по id(который скрыт в гриде)
         {
-            string adress = dataGridView1.CurrentCellAddress.Y.ToString();
-            adress = dataGridView1.Rows[Convert.ToInt32(adress)].Cells[0].Value.ToString();
-            string query = "Delete From C#Table Where id=" + adress;
-            executeSQL(query);
-            MessageBox.Show("Удалено.");
-            Form1_Load(null, null);
-        }
-
-        void executeSQL(string query) //Выполнение команд для вставки, удаления, изменения
-        {
-            //string _conect = ConfigurationManager.ConnectionStrings["MSSqlConStr"].ConnectionString;
+            int RowID = TableGrid.CurrentCellAddress.Y;
+            int.TryParse(TableGrid.Rows[RowID].Cells[0].Value.ToString(), out RowID);
             string _conect = string.Format(@"Data Source=(LocalDB)\v11.0;AttachDbFilename={0}\Test.mdf;",
                     Environment.CurrentDirectory);
-            using (SqlConnection con = new SqlConnection(_conect))
+            DataContext db = new DataContext(_conect);
+            var query = (from data in db.GetTable<TableClass>()
+                         where data.Id == RowID
+                         select data).SingleOrDefault();
+            try
             {
-                con.Open();
-                using (var cmd = new SqlCommand(query, con))
-                {
-                    cmd.ExecuteNonQuery();                    
-                }
-                con.Close();
-            }            
-        }
+                db.GetTable<TableClass>().DeleteOnSubmit(query);
+                db.SubmitChanges();
+                MessageBox.Show("Удалено.");
+            }
+            catch
+            {
+                MessageBox.Show("Ошибка :Не удалено.");
+            }
+            DefaultButton_Click(null, null);
+        }        
 
-        private void button5_Click(object sender, EventArgs e) //Собираем измененные строки из грида и их id из idList и делаем запросы на изменения
-        {
-
-            string query = null;                
-                for (int i = 0; i < idList.Count; i++)
+        private void ChangeButton_Click(object sender, EventArgs e) //Собираем измененные строки из грида и их id из idList и делаем запросы на изменения
+        {            
+            List<TableClass> ChangeList = new List<TableClass> { };
+            for (int i = 0; i < idList.Count; i++)
                 {
-                    query = string.Format("Update C#Table SET Dat='{0}', Organisation=N'{1}', City=N'{2}', Country=N'{3}', Manager=N'{4}', Quantity={5}, Summa={6} Where Id={7}"
-                        , ((DateTime)dataGridView1[1, idList[i]].Value).ToString("dd/MM/yyyy")
-                        , dataGridView1[2, idList[i]].Value, dataGridView1[3, idList[i]].Value, dataGridView1[4, idList[i]].Value
-                        , dataGridView1[5, idList[i]].Value, (Convert.ToDouble(dataGridView1[6, idList[i]].Value))
-                        , (Convert.ToDouble(dataGridView1[7, idList[i]].Value)), dataGridView1[0, idList[i]].Value);
-                    executeSQL(query);
+                ChangeList.Add((from data in db.GetTable<TableClass>()
+                                where data.Id == Convert.ToInt32(TableGrid[0, idList[i]].Value)
+                                select data).SingleOrDefault());
+                ChangeList[i].Dat = Convert.ToDateTime(TableGrid[1, idList[i]].Value);
+                ChangeList[i].Organisation = (TableGrid[2, idList[i]].Value.ToString().Length <= 50) ? TableGrid[2, idList[i]].Value.ToString() : TableGrid[2, idList[i]].Value.ToString().Substring(0, 50);
+                ChangeList[i].City = (TableGrid[3, idList[i]].Value.ToString().Length <= 50) ? TableGrid[3, idList[i]].Value.ToString() : TableGrid[3, idList[i]].Value.ToString().Substring(0, 50);
+                ChangeList[i].Country = (TableGrid[4, idList[i]].Value.ToString().Length <= 50) ? TableGrid[4, idList[i]].Value.ToString() : TableGrid[4, idList[i]].Value.ToString().Substring(0, 50);
+                ChangeList[i].Manager = (TableGrid[5, idList[i]].Value.ToString().Length <= 50) ? TableGrid[5, idList[i]].Value.ToString() : TableGrid[5, idList[i]].Value.ToString().Substring(0, 50);
+                ChangeList[i].Quantity = Convert.ToDecimal(TableGrid[6, idList[i]].Value);
+                ChangeList[i].Summa = Convert.ToDecimal(TableGrid[6, idList[i]].Value);
                 }
+            try
+            {
+                db.SubmitChanges();
                 MessageBox.Show("Изменено.");
                 idList.Clear();
-                button2_Click(null, null);                        
+                DefaultButton_Click(null, null);
+            }
+            catch
+            {
+                MessageBox.Show("Ошибка: не изменено.");
+            }
+                
         }
 
-        private void dataGridView1_CellEndEdit(object sender, DataGridViewCellEventArgs e) // Записуем id изменных строк
+        private void TableGrid_CellEndEdit(object sender, DataGridViewCellEventArgs e) // Записуем id изменных строк
         {
             try
             {
-                string adress = dataGridView1.CurrentCellAddress.Y.ToString();
-                int check = 0;
-                for (int i = 0; i < idList.Count; i++)
-                {
-                    if (idList[i] == Convert.ToInt32(adress))
-                    {
-                        check += 1;
-                        break;
-                    }
-                }
-                if (check == 0)
-                {
-                    idList.Add(Convert.ToInt32(adress));
-                }
-                if (idList.All(id => id != Convert.ToInt32(adress)))
-                    idList.Add(Convert.ToInt32(adress));
+                int RowID = TableGrid.CurrentCellAddress.Y;                             
+                if (idList.All(id => id != Convert.ToInt32(RowID)))
+                    idList.Add(Convert.ToInt32(RowID));
             }
             catch(Exception a)
             {
                 MessageBox.Show("Неправильно введены изменения в ячейки. \n\n\n" + a);            
             }
-        }        
+        }
 
-        private void dataGridView1_DataError_1(object sender, DataGridViewDataErrorEventArgs e) //Обработка ошибок в гриде
+        private void TableGrid_DataError(object sender, DataGridViewDataErrorEventArgs e) //Обработка ошибок в гриде
         {            
                 MessageBox.Show("Неправильный формат ввода");            
         }
 
-        private void button4_Click(object sender, EventArgs e) //Первый раз клацая включаем режим добавления новых строк, 2 раз добавляем новые строки
+        private void AddButton_Click(object sender, EventArgs e) //Первый раз клацая включаем режим добавления новых строк, 2 раз добавляем новые строки
         {
-            if (dataGridView1.AllowUserToAddRows == true)
+            if (TableGrid.AllowUserToAddRows == true)
             {
-                
-                List<string> queryList = new List<string> { }; //Лист со списком запросов на добавление строк                    
-                    for (int i = idList[0]+1; i < dataGridView1.RowCount-1; i++)
-                    {
-                        try
-                        {
-                            string query = string.Format("Insert Into C#Table Values ('{0}', N'{1}', N'{2}', N'{3}', N'{4}', {5}, {6})"
-                                , ((DateTime)dataGridView1[1, i].Value).ToString("dd/MM/yyyy")
-                                , dataGridView1[2, i].Value, dataGridView1[3, i].Value, dataGridView1[4, i].Value
-                                , dataGridView1[5, i].Value, (Convert.ToDouble(dataGridView1[6, i].Value))
-                                , (Convert.ToDouble(dataGridView1[7, i].Value)));
-                            queryList.Add(query);
-                        }
-                        catch(Exception a)
-                        {
-                            MessageBox.Show("Заполните пустые ячейки \n\n\n" + a);                            
-                        }                        
+
+
+                List<string> queryList = new List<string> { }; //Лист со списком запросов на добавление строк        
+
+                string _conect = string.Format(@"Data Source=(LocalDB)\v11.0;AttachDbFilename={0}\Test.mdf;",
+                    Environment.CurrentDirectory);
+                DataContext db = new DataContext(_conect);                
+                List<TableClass> myList = new List<TableClass> { };
+
+                for (int i = idList[0] + 1; i < TableGrid.RowCount - 1; i++)
+                {
+                    try
+                    {                        
+                        myList.Add(new TableClass { Dat = Convert.ToDateTime(TableGrid[1, i].Value)
+                            , Organisation = (TableGrid[2, i].Value.ToString().Length<=50) ? TableGrid[2, i].Value.ToString() : TableGrid[2, i].Value.ToString().Substring(0, 50)
+                            , City = (TableGrid[3, i].Value.ToString().Length <= 50) ? TableGrid[3, i].Value.ToString() : TableGrid[3, i].Value.ToString().Substring(0, 50)
+                            , Country = (TableGrid[4, i].Value.ToString().Length <= 50) ? TableGrid[4, i].Value.ToString() : TableGrid[4, i].Value.ToString().Substring(0, 50)
+                            , Manager = (TableGrid[5, i].Value.ToString().Length <= 50) ? TableGrid[5, i].Value.ToString() : TableGrid[5, i].Value.ToString().Substring(0, 50)
+                            , Quantity = Convert.ToDecimal(TableGrid[6, i].Value)
+                            , Summa = Convert.ToDecimal(TableGrid[7, i].Value) });
                     }
-                    for (int i = 0; i < queryList.Count; i++)
+                    catch 
                     {
-                        executeSQL(queryList[i]);
-                        if (i==queryList.Count-1)
+                        MessageBox.Show("Заполните пустые ячейки");
+                    }
+                }                
+                if (myList.Count > 0)
+                {
+                    try
+                    {
+                        db.GetTable<TableClass>().InsertAllOnSubmit(myList);
+                        db.SubmitChanges();
                         MessageBox.Show("Добавлено");
                     }
-                    button2_Click(null, null);                
-            }
+                    catch
+                    {
+                        MessageBox.Show("Ошибка: не добавлено");
+                    }
+                    DefaultButton_Click(null, null);
+                }                              
+            }            
             else
             {
                 idList.Clear();
-                for (int i = 0; i < dataGridView1.RowCount; i++)
-                    dataGridView1.Rows[i].ReadOnly = true;
-                idList.Add(dataGridView1.RowCount - 1);
-                dataGridView1.AllowUserToAddRows = true;                
+                for (int i = 0; i < TableGrid.RowCount; i++)
+                    TableGrid.Rows[i].ReadOnly = true;
+                idList.Add(TableGrid.RowCount - 1);
+                TableGrid.AllowUserToAddRows = true;                
             }
         }
 
-        private void dataGridView1_RowsAdded(object sender, DataGridViewRowsAddedEventArgs e) //Скрываем лишние кнопки в режиме добавления
+        private void TableGrid_RowsAdded(object sender, DataGridViewRowsAddedEventArgs e) //Скрываем лишние кнопки в режиме добавления
         {            
-            if (dataGridView1.AllowUserToAddRows == true)
+            if (TableGrid.AllowUserToAddRows == true)
             {
-                button1.Visible = false;
-                button3.Visible = false;
-                button5.Visible = false;
+                SumButton.Visible = false;
+                DeleteButton.Visible = false;
+                ChangeButton.Visible = false;
             }
         }
 
-        private void button6_Click(object sender, EventArgs e)
+        private void HelpButton_Click(object sender, EventArgs e)
         {
-            MessageBox.Show("Для суммирования выберите столбцы в списке и нажмите \"Выбрать итоги\".\n"+
-                            "Для удаления выберите нужную строку и нажмите \"Удалить\".\n"+
-                            "Для изменения измените нужные строки и нажмите \"Изменить\".\n"+
-                            "Для добавления новых записей нажмите \"Добавить\", добавьте нужные строки"+
-                            " и нажмите снова \"Добавить\".\n"+
-                            "Для отмены или для того, что бы показать всю информацию, нажмите \"Сброс\".");  
-        }
+            MessageBox.Show("Для суммирования выберите столбцы в списке и нажмите \"Выбрать итоги\".\n" +
+                            "Для удаления выберите нужную строку и нажмите \"Удалить\".\n" +
+                            "Для изменения измените нужные строки и нажмите \"Изменить\".\n" +
+                            "Для добавления новых записей нажмите \"Добавить\", добавьте нужные строки" +
+                            " и нажмите снова \"Добавить\".\n" +
+                            "Для отмены или для того, что бы показать всю информацию, нажмите \"Сброс\".");
+
+            //using (SqlConnection con = new SqlConnection(_conect))
+            //{
+            //    con.Open();
+            //    string sql = "INSERT INTO C#Table VALUES(@param1 ,@param2 ,@param3 ,@param4 ,@param5 ,@param6 ,@param7), (@param8 ,@param9 ,@param10 ,@param11 ,@param12 ,@param13 ,@param14)";
+            //    SqlCommand cmd = new SqlCommand(sql, con);
+            //    cmd.Parameters.Add("@param1", SqlDbType.Date).Value = "01-02-2015";
+            //    cmd.Parameters.Add("@param2", SqlDbType.NVarChar, 50).Value = "фывфыв";
+            //    cmd.Parameters.Add("@param3", SqlDbType.NVarChar, 50).Value = "фывфыфывыфвв";
+            //    cmd.Parameters.Add("@param4", SqlDbType.NVarChar, 50).Value = "фыпа";
+            //    cmd.Parameters.Add("@param5", SqlDbType.NVarChar, 50).Value = "фпавп";
+            //    cmd.Parameters.Add("@param6", SqlDbType.Decimal, 13).Value = 23525.533;
+            //    cmd.Parameters["@param6"].Precision = 13;
+            //    cmd.Parameters["@param6"].Scale = 2;
+            //    cmd.Parameters.Add("@param7", SqlDbType.Decimal, 13).Value = 23535.35235;
+            //    cmd.Parameters["@param7"].Precision = 13;
+            //    cmd.Parameters["@param7"].Scale = 2;
+            //    cmd.Prepare();
+            //    cmd.ExecuteNonQuery();
+            //    con.Close();
+            //}
+        }        
     }
 }
 
