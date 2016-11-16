@@ -15,6 +15,9 @@ namespace TestBulankin
         private Dictionary<string, string> Translate = new Dictionary<string, string> { }; //Словарь для перевода имен        
         private DataContext db = new DataContext(string.Format(@"Data Source=(LocalDB)\v11.0;AttachDbFilename={0}\Test.mdf;",
                     Environment.CurrentDirectory));
+        /// <summary>
+        /// Запонялем словарь для перевода столбцов
+        /// </summary>
         public MainForm()
         {            
             InitializeComponent();
@@ -27,7 +30,11 @@ namespace TestBulankin
             Translate.Add("Summa", "Сумма");
         }
         
-
+        /// <summary>
+        /// Заполняем грид и переводим имена столбцов
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
         private void MainForm_Load(object sender, EventArgs e)
         {            
             var query = from data in db.GetTable<TableClass>() select data;
@@ -38,23 +45,22 @@ namespace TestBulankin
             for (int i = 1; i < TableGrid.Columns.Count - 2; i++) //Заполненя комбобокса
                 ComboBofColumns.Items.Add(TableGrid.Columns[i].HeaderText);
         }
-
-        private void ComboBofColumns_SelectedIndexChanged(object sender, EventArgs e) // Добавления имени столбца в листбокс при выборе столбца в комбобоксе
-        {
-            bool check = false;
-            for(int i = 0; i < ListBofColumns.Items.Count; i++)
-            {
-                if(ListBofColumns.Items[i]==ComboBofColumns.SelectedItem)
-                {
-                    check = true;
-                    break;
-                }
-            }
-            if(check==false)
+        /// <summary>
+        /// Добавления имени столбца в листбокс при выборе столбца в комбобоксе
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
+        private void ComboBofColumns_SelectedIndexChanged(object sender, EventArgs e)
+        {            
+            if( !ListBofColumns.Items.Cast<string>().Select(i => i).Any(i => i == ComboBofColumns.SelectedItem.ToString()) || ListBofColumns.Items.Count==0)
                 ListBofColumns.Items.Add(ComboBofColumns.SelectedItem);
         }
-
-        private void SumButton_Click(object sender, EventArgs e) // Переводим имена стобцов с русского на англ и составляем из них запрос
+        /// <summary>
+        /// Переводим имена стобцов с русского на англ и составляем из них запрос
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
+        private void SumButton_Click(object sender, EventArgs e)
             {                        
             string groupingQuery = $"new({string.Join(", ", ListBofColumns.Items.Cast<string>().Select(s => translate(s, true)))})";
             string selectQuery = string.Join(", ", ListBofColumns.Items.Cast<string>().Select(s => $"Key.{translate(s, true)}"));            
@@ -66,8 +72,12 @@ namespace TestBulankin
             ChangeButton.Visible = false;
             TableGrid.ReadOnly = true;            
         }
-
-        private void DefaultButton_Click(object sender, EventArgs e)// Возврат к первоначальному запросу и установка всех кнопок в первоначальный вид
+        /// <summary>
+        /// Возврат к первоначальному запросу и установка всех кнопок в первоначальный вид
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
+        private void DefaultButton_Click(object sender, EventArgs e)
             {
             ListBofColumns.Items.Clear();
             ComboBofColumns.Items.Clear();            
@@ -81,12 +91,17 @@ namespace TestBulankin
             TableGrid.Rows.Clear();
             int columnsCount = TableGrid.Columns.Count;
             for (int i = 0; i < columnsCount; i++)
-                TableGrid.Columns.RemoveAt(0);
+                TableGrid.Columns.RemoveAt(0);            
             MainForm_Load(null, null);
         }
-        
 
-        private string translate(string name, bool option) // Метод для переводов имен столбцов
+        /// <summary>
+        /// Метод для переводов имен столбцов
+        /// </summary>
+        /// <param name="name">Имя столбца для перевода</param>
+        /// <param name="option">true для рус на англ, а false для англ на рус</param>
+        /// <returns></returns>
+        private string translate(string name, bool option)
         {
             if(!option)
             name=Translate.Where(f => f.Key == name).Select(f => f.Value).SingleOrDefault();
@@ -96,14 +111,15 @@ namespace TestBulankin
             }            
             return name;
         }
-
-        private void DeleteButton_Click(object sender, EventArgs e) //Удаляем выбранную строку по id(который скрыт в гриде)
+        /// <summary>
+        /// Удаляем выбранную строку по id(который скрыт в гриде)
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
+        private void DeleteButton_Click(object sender, EventArgs e)
         {
             int RowID = TableGrid.CurrentCellAddress.Y;
-            int.TryParse(TableGrid.Rows[RowID].Cells[0].Value.ToString(), out RowID);
-            string _conect = string.Format(@"Data Source=(LocalDB)\v11.0;AttachDbFilename={0}\Test.mdf;",
-                    Environment.CurrentDirectory);
-            DataContext db = new DataContext(_conect);
+            int.TryParse(TableGrid.Rows[RowID].Cells[0].Value.ToString(), out RowID);            
             var query = (from data in db.GetTable<TableClass>()
                          where data.Id == RowID
                          select data).SingleOrDefault();
@@ -118,9 +134,13 @@ namespace TestBulankin
                 MessageBox.Show("Ошибка :Не удалено.");
             }
             DefaultButton_Click(null, null);
-        }        
-
-        private void ChangeButton_Click(object sender, EventArgs e) //Собираем измененные строки из грида и их id из idList и делаем запросы на изменения
+        }
+        /// <summary>
+        /// Собираем измененные строки из грида и их id из idList и делаем запросы на изменения
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
+        private void ChangeButton_Click(object sender, EventArgs e)
         {            
             List<TableClass> ChangeList = new List<TableClass> { };
             for (int i = 0; i < idList.Count; i++)
@@ -149,8 +169,12 @@ namespace TestBulankin
             }
                 
         }
-
-        private void TableGrid_CellEndEdit(object sender, DataGridViewCellEventArgs e) // Записуем id изменных строк
+        /// <summary>
+        /// Записуем id изменных строк
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
+        private void TableGrid_CellEndEdit(object sender, DataGridViewCellEventArgs e)
         {
             try
             {
@@ -163,13 +187,21 @@ namespace TestBulankin
                 MessageBox.Show("Неправильно введены изменения в ячейки. \n\n\n" + a);            
             }
         }
-
-        private void TableGrid_DataError(object sender, DataGridViewDataErrorEventArgs e) //Обработка ошибок в гриде
+        /// <summary>
+        /// Обработка ошибок в гриде
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
+        private void TableGrid_DataError(object sender, DataGridViewDataErrorEventArgs e) 
         {            
                 MessageBox.Show("Неправильный формат ввода");            
         }
-
-        private void AddButton_Click(object sender, EventArgs e) //Первый раз клацая включаем режим добавления новых строк, 2 раз добавляем новые строки
+        /// <summary>
+        /// Первый раз клацая включаем режим добавления новых строк, 2 раз добавляем новые строки
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
+        private void AddButton_Click(object sender, EventArgs e)
         {
             if (TableGrid.AllowUserToAddRows == true)
             {
@@ -217,14 +249,18 @@ namespace TestBulankin
             else
             {
                 idList.Clear();
-                for (int i = 0; i < TableGrid.RowCount; i++)
-                    TableGrid.Rows[i].ReadOnly = true;
+                foreach (DataGridViewRow Row in TableGrid.Rows)
+                    Row.ReadOnly = true;                
                 idList.Add(TableGrid.RowCount - 1);
                 TableGrid.AllowUserToAddRows = true;                
             }
         }
-
-        private void TableGrid_RowsAdded(object sender, DataGridViewRowsAddedEventArgs e) //Скрываем лишние кнопки в режиме добавления
+        /// <summary>
+        /// ///Скрываем лишние кнопки в режиме добавления
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
+        private void TableGrid_RowsAdded(object sender, DataGridViewRowsAddedEventArgs e)
         {            
             if (TableGrid.AllowUserToAddRows == true)
             {
@@ -262,8 +298,8 @@ namespace TestBulankin
             //    cmd.Prepare();
             //    cmd.ExecuteNonQuery();
             //    con.Close();
-            //}
-        }        
+            //}                              
+        }                
     }
 }
 
